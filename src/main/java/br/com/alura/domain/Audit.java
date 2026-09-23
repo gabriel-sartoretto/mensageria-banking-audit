@@ -10,21 +10,17 @@ import java.time.LocalDateTime;
 @Entity
 public class Audit {
 
-    public Audit() {
-
-    }
-
-    public Audit(String cnpj, String status) {
-        this.cnpj = cnpj;
-        this.status = status;
-    }
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private String cnpj;
 
     private String status;
+
+    public Audit(String cnpj, String status) {
+        this.cnpj = cnpj;
+        this.status = status;
+    }
 
     public Long getId() {
         return id;
