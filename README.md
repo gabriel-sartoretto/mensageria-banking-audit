@@ -1,61 +1,51 @@
 # banking-audit
 
-This project uses Quarkus, the Supersonic Subatomic Java Framework.
+Microsserviço de **auditoria**. Consome do RabbitMQ cada mudança de situação cadastral de agência e grava um registro
+histórico no banco.
 
-If you want to learn more about Quarkus, please visit its website: <https://quarkus.io/>.
+Faz parte do projeto [kafka-rabbitmq-banking](https://github.com/gabriel-sartoretto/kafka-rabbitmq-banking), junto com
+[banking-validation](https://github.com/gabriel-sartoretto/mensageria-banking-validation) e
+[banking-service](https://github.com/gabriel-sartoretto/mensageria-banking-service).
 
-## Running the application in dev mode
+**Stack:** Java 21 · Quarkus 3.29 · Hibernate Reactive Panache · PostgreSQL · RabbitMQ
 
-You can run your application in dev mode that enables live coding using:
+## O que ele faz
 
-```shell script
+O `BankingAuditService` escuta o canal `notificacoes`:
+
+| Configuração | Valor |
+|---|---|
+| Exchange | `notificacoes` (direct), publicado pelo banking-validation |
+| Fila | `notificacao.audit` (ligada à routing key `agencia.change_status`) |
+| Dead letter | DLQ criada automaticamente, routing key `agencia.change_status.dlq` |
+
+Cada mensagem (JSON com `cnpj` e `situacaoCadastral`) vira uma linha na tabela `audit`:
+
+```sql
+audit(id serial, cnpj text, status text, dateTime timestamp default now())
+```
+
+O serviço não expõe endpoints de negócio. Ele só consome mensagens (porta HTTP 8282).
+
+## Rodando localmente
+
+Pré-requisito: o RabbitMQ rodando. Ele sobe pelo `docker-compose.yml` do
+[banking-validation](https://github.com/gabriel-sartoretto/mensageria-banking-validation) (porta 5672).
+
+```bash
+docker compose up -d        # PostgreSQL na porta 5434, banco "audit"
 ./mvnw quarkus:dev
 ```
 
-> **_NOTE:_**  Quarkus now ships with a Dev UI, which is available in dev mode only at <http://localhost:8080/q/dev/>.
+Para ver os registros: `docker exec -it postgres-db-alura-audit-container psql -U joao -d audit -c "select * from audit;"`
 
-## Packaging and running the application
+Variáveis de ambiente: `QUARKUS_DATASOURCE_HOST` / `_PORT` (padrão `localhost` / `5434`) e
+`QUARKUS_DATASOURCE_USERNAME` / `_PASSWORD` (padrão `joao` / `joao`).
 
-The application can be packaged using:
+## Build
 
-```shell script
-./mvnw package
-```
-
-It produces the `quarkus-run.jar` file in the `target/quarkus-app/` directory.
-Be aware that it’s not an _über-jar_ as the dependencies are copied into the `target/quarkus-app/lib/` directory.
-
-The application is now runnable using `java -jar target/quarkus-app/quarkus-run.jar`.
-
-If you want to build an _über-jar_, execute the following command:
-
-```shell script
+```bash
+./mvnw package                                  # target/quarkus-app/quarkus-run.jar
 ./mvnw package -Dquarkus.package.jar.type=uber-jar
+./mvnw package -Dnative                         # executável nativo (requer GraalVM)
 ```
-
-The application, packaged as an _über-jar_, is now runnable using `java -jar target/*-runner.jar`.
-
-## Creating a native executable
-
-You can create a native executable using:
-
-```shell script
-./mvnw package -Dnative
-```
-
-Or, if you don't have GraalVM installed, you can run the native executable build in a container using:
-
-```shell script
-./mvnw package -Dnative -Dquarkus.native.container-build=true
-```
-
-You can then execute your native executable with: `./target/banking-audit-1.0.0-SNAPSHOT-runner`
-
-If you want to learn more about building native executables, please consult <https://quarkus.io/guides/maven-tooling>.
-
-## Related Guides
-
-- REST ([guide](https://quarkus.io/guides/rest)): A Jakarta REST implementation utilizing build time processing and Vert.x. This extension is not compatible with the quarkus-resteasy extension, or any of the extensions that depend on it.
-- REST Jackson ([guide](https://quarkus.io/guides/rest#json-serialisation)): Jackson serialization support for Quarkus REST. This extension is not compatible with the quarkus-resteasy extension, or any of the extensions that depend on it
-- Hibernate ORM with Panache ([guide](https://quarkus.io/guides/hibernate-orm-panache)): Simplify your persistence code for Hibernate ORM via the active record or the repository pattern
-- JDBC Driver - PostgreSQL ([guide](https://quarkus.io/guides/datasource)): Connect to the PostgreSQL database via JDBC
